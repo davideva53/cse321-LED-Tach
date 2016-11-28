@@ -53,12 +53,15 @@ def sendrecv(cmd): #SENDS COMMAND TO DONGLE, RECEIVES DATA FROM DONGLE, IGNORES 
                 if buffer == "SEARCHING...":
                     continue
                 if buffer == "?":
+		    #self.log.debug(''.join(("Command ", cmd, " is invalid.")) )
                    raise InvalidCmdError("Command '%s' is invalid." % cmd)
                 if buffer == "NO DATA":
+		   #self.log.debug(''.join(("Command ", cmd, " produced NO DATA.")) )
                     raise NoDataError("Dongle returned 'NO DATA'.")
                 if buffer == "STOPPED":
+		   #self.log.warning(''.join(("ELM returned STOPPED")) )
                     raise StoppedError("Dongle returned 'STOPPED'.")
-                sock.recv(2) #REMOVES THE "\r>" WAITING TO BE RECEIVED
+                sock.recv(2) # get rid of "\r>" that's still waiting to be received
                 return buffer
 
 #INITALIZE LED GPIO PINS
