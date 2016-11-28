@@ -1,42 +1,32 @@
 import string
 import time
 import bluetooth #MAY NEED TO INSTALL python-bluez LIBRARY
-import RPi.GPIO as GPIO 
+import RPi.GPIO as GPIO
+import sys
 
-class ConnectFailureError(Exception):
-    pass
+MACadd = "00:1D:A5:68:98:8C" #DAVE'S DONGLE (ELM327 v2.1) CHANGE THIS TO YOUR MAC ADDRESS
+sock = 0
 
-class StateError(Exception):
-    pass
-
-class InvalidCmdError(Exception):
-    pass
-
-class NoDataError(Exception):
-	#MACadd = "00:1D:A5:68:98:8C" #DAVE'S DONGLE (ELM327 v2.1) CHANGE THIS TO YOUR MAC ADDRESS
-	'''while 1:
-    		try:
-        		sock = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
-        		sock.connect((MACadd, 1))
-        		break
-    		except bluetooth.btcommon.BluetoothError as error:
-        		sock.close()
-        		print ("Could not connect: ", error, "; Retrying in 2 seconds...")
-        		time.sleep(2)
-	print("Socket successfully opened!")'''
-	pass
-class StoppedError(Exception):
-    pass
-
-def redline():      #FUNCTION TO MAKE BLUE LED FREAK OUT
-	GPIO.output(8,GPIO.HIGH)
-	time.sleep(0.05)
-	GPIO.output(8,GPIO.LOW)
+def connect():
+    print("Opening Bluetooth socket...")
+    count = 0
+    while 1:
+        try:
+            sock = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
+            sock.connect((MACadd, 1))
+            break
+        except bluetooth.btcommon.BluetoothError as error:
+            sock.close()
+            count += 1
+            if count == 5:
+                sys.exit()
+            print ("Could not connect: ", error, "; Retrying in 2 seconds...")
+            time.sleep(2)
+    print("Socket successfully opened!")
 	
-def sendrecv(cmd): #SENDS COMMAND TO DONGLE, RECEIVES DATA FROM DONGLE, IGNORES NON-USEFUL DATA
-    
+def sendrecv(cmd): #SENDS COMMAND TO DONGLE, RECEIVES DATA FROM DONGLE 
     sock.send(cmd + "\r\n")
-    time.sleep(0.0525)      #SLEEP TO HELP YOUR DONGLE
+    time.sleep(0.05)      #SLEEP TO HELP YOUR DONGLE
     while 1:
         buffer = ''
         while 1:
@@ -49,19 +39,21 @@ def sendrecv(cmd): #SENDS COMMAND TO DONGLE, RECEIVES DATA FROM DONGLE, IGNORES 
                     buffer = buffer + sym
         #print("Here!")
         #print(buffer)
-	if buffer != "" and buffer != "\r" and buffer != cmd and buffer != (">" + cmd):
-                if buffer == "SEARCHING...":
-                    continue
-                if buffer == "?":
-                   raise InvalidCmdError("Command '%s' is invalid." % cmd)
-                if buffer == "NO DATA":
-                    raise NoDataError("Dongle returned 'NO DATA'.")
-                if buffer == "STOPPED":
-                    raise StoppedError("Dongle returned 'STOPPED'.")
-                sock.recv(2) #REMOVES THE "\r>" WAITING TO BE RECEIVED
-                return buffer
+	    if buffer != "" and buffer != "\r" and buffer != cmd and buffer != (">" + cmd):
+            if buffer == "SEARCHING...":
+                continue
+            if buffer == "?":
+                print('Received "?" because an invalid command was sent.')
+                sys.exit()
+            if buffer == "UNABLE TO CONNECT":
+                print('Received "UNABLE TO CONNECT"')
+                connect()
+            sock.recv(2) #REMOVES THE "\r>" WAITING TO BE RECEIVED
+            return buffer
 
-#INITALIZE LED GPIO PINS
+connect()
+	
+#INITIALIZE LED GPIO PINS
 GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
 GPIO.setup(14,GPIO.OUT)
@@ -109,49 +101,41 @@ GPIO.output(15,GPIO.LOW)
 time.sleep(.09)
 GPIO.output(14,GPIO.LOW)
 
-MACadd = "00:1D:A5:68:98:8C" #DAVE'S DONGLE (ELM327 v2.1) CHANGE THIS TO YOUR MAC ADDRESS
-print("Opening Bluetooth device...")
-
-while 1:
-    try:
-        sock = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
-        sock.connect((MACadd, 1))
-        break
-    except bluetooth.btcommon.BluetoothError as error:
-        sock.close()
-        print ("Could not connect: ", error, "; Retrying in 2 seconds...")
-        time.sleep(2)
-
-print("Socket successfully opened!")
-
-#SEND COMMAND "atz" TO CLEAR COMMANDS
+#SEND COMMAND "atz" TO RESET DONGLE
 res = sendrecv("atz")
 print("atz response is:")
 print(res)
 
-#SEND COMMAND "ate0" TO TURN OF ECHOES
+#SEND COMMAND "ate0" TO TURN OFF ECHOES
 res = sendrecv("ate0")
 print("ate0 response is:")
 print(res)
 
-#SEND COMMAND "0100" TP READY DONLE FOR COMMS
-#res = sendrecv("0100")
-#print("0100 response is:")
-#print(res)
-
-
 #LOOP FOR RPM 
 while 1:
     res = sendrecv("010C")
+    if (res == "NO DATA"):
+	    sock.close()
+        connect()
+        sendrecv("atz")
+        sendrecv("ate0")
+        continue
+    elif (res == "STOPPED"):
+	    sock.close()
+        connect()
+        sendrecv("atz")
+        sendrecv("ate0")
+        continue
     data = res.split()
-    #print(data)
 
 #EXCEPTION (IGNORE) WHEN len(LIST) < 3
     try:
         a = int(data[2], 16)
         b = int(data[3], 16)
     except IndexError:
-	continue
+        print("IndexError occurred. data is:")
+        print(data)
+        continue
     
     RPM = ((256 * a) + b) / 4
    #print("RPM is %d" % rpm)
@@ -171,6 +155,7 @@ while 1:
         GPIO.output(18,GPIO.LOW)
         GPIO.output(15,GPIO.LOW)
         GPIO.output(14,GPIO.HIGH)
+        GPIO.output(8,GPIO.LOW)
     elif(RPM > 1000) and (RPM <= 1500):
         GPIO.output(25,GPIO.LOW)
         GPIO.output(24,GPIO.LOW)
@@ -178,7 +163,7 @@ while 1:
         GPIO.output(18,GPIO.LOW)
         GPIO.output(14,GPIO.HIGH)
         GPIO.output(15,GPIO.HIGH)
-	#redline()
+        GPIO.output(8,GPIO.LOW)
     elif(RPM > 1500) and (RPM <= 2000):
         GPIO.output(25,GPIO.LOW)
         GPIO.output(24,GPIO.LOW)
@@ -186,6 +171,7 @@ while 1:
         GPIO.output(14,GPIO.HIGH) 
         GPIO.output(15,GPIO.HIGH)
         GPIO.output(18,GPIO.HIGH)
+        GPIO.output(8,GPIO.LOW)
     elif(RPM > 2000) and (RPM <= 2500):
         GPIO.output(25,GPIO.LOW)
         GPIO.output(24,GPIO.LOW)
@@ -193,6 +179,7 @@ while 1:
         GPIO.output(15,GPIO.HIGH)
         GPIO.output(18,GPIO.HIGH)
         GPIO.output(23,GPIO.HIGH)
+        GPIO.output(8,GPIO.LOW)
     elif(RPM > 2500) and (RPM <= 3000):
         GPIO.output(25,GPIO.LOW)
         GPIO.output(14,GPIO.HIGH)
@@ -200,24 +187,27 @@ while 1:
         GPIO.output(18,GPIO.HIGH)
         GPIO.output(23,GPIO.HIGH)
         GPIO.output(24,GPIO.HIGH)
+        GPIO.output(8,GPIO.LOW)
     elif(RPM > 3000) and (RPM < 3500):
         GPIO.output(14,GPIO.HIGH)
         GPIO.output(15,GPIO.HIGH)
         GPIO.output(18,GPIO.HIGH)
         GPIO.output(23,GPIO.HIGH)
-	GPIO.output(24,GPIO.HIGH)
-        GPIO.output(25,GPIO.HIGH)	
-    elif(RPM >= 3500) and (RPM <= 4000):
+        GPIO.output(24,GPIO.HIGH)
+        GPIO.output(25,GPIO.HIGH)
+        GPIO.output(8,GPIO.LOW)
+    elif(RPM >= 3500):
         GPIO.output(14,GPIO.HIGH)
         GPIO.output(15,GPIO.HIGH)
-	GPIO.output(18,GPIO.HIGH)
+        GPIO.output(18,GPIO.HIGH)
         GPIO.output(23,GPIO.HIGH)
-	GPIO.output(24,GPIO.HIGH)
+        GPIO.output(24,GPIO.HIGH)
         GPIO.output(25,GPIO.HIGH)
         GPIO.output(8,GPIO.HIGH)
-	time.sleep(0.05)
-	GPIO.output(8,GPIO.LOW)
-	#redline()	 	
+        time.sleep(0.05)
+        GPIO.output(8,GPIO.LOW)
+        time.sleep(0.04)
     else:
-	continue
+        print("Something went horribly wrong...")
+
 sock.close()
