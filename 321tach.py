@@ -5,7 +5,7 @@ import RPi.GPIO as GPIO
 import sys
 
 MACadd = "00:1D:A5:68:98:8C" #DAVE'S DONGLE (ELM327 v2.1) CHANGE THIS TO YOUR MAC ADDRESS
-sock = 0
+sock = None
 
 def connect():
     print("Opening Bluetooth socket...")
@@ -39,7 +39,7 @@ def sendrecv(cmd): #SENDS COMMAND TO DONGLE, RECEIVES DATA FROM DONGLE
                     buffer = buffer + sym
         #print("Here!")
         #print(buffer)
-	    if buffer != "" and buffer != "\r" and buffer != cmd and buffer != (">" + cmd):
+	if buffer != "" and buffer != "\r" and buffer != cmd and buffer != (">" + cmd):
             if buffer == "SEARCHING...":
                 continue
             if buffer == "?":
@@ -50,8 +50,6 @@ def sendrecv(cmd): #SENDS COMMAND TO DONGLE, RECEIVES DATA FROM DONGLE
                 connect()
             sock.recv(2) #REMOVES THE "\r>" WAITING TO BE RECEIVED
             return buffer
-
-connect()
 	
 #INITIALIZE LED GPIO PINS
 GPIO.setmode(GPIO.BCM)
@@ -100,7 +98,7 @@ time.sleep(.09)
 GPIO.output(15,GPIO.LOW)
 time.sleep(.09)
 GPIO.output(14,GPIO.LOW)
-
+connect()
 #SEND COMMAND "atz" TO RESET DONGLE
 res = sendrecv("atz")
 print("atz response is:")
@@ -115,13 +113,13 @@ print(res)
 while 1:
     res = sendrecv("010C")
     if (res == "NO DATA"):
-	    sock.close()
+	sock.close()
         connect()
         sendrecv("atz")
         sendrecv("ate0")
         continue
     elif (res == "STOPPED"):
-	    sock.close()
+	sock.close()
         connect()
         sendrecv("atz")
         sendrecv("ate0")
