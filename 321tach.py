@@ -4,8 +4,7 @@ import bluetooth #MAY NEED TO INSTALL python-bluez LIBRARY
 import RPi.GPIO as GPIO
 import sys
 
-MACadd = "00:1D:A5:68:98:8C" #DAVE'S DONGLE (ELM327 v2.1) CHANGE THIS TO YOUR MAC ADDRESS
-sock = None
+MACadd = "00:1D:A5:68:98:8C" #DAVE'S DONGLE (ELM327 v2.1) CHANGE THIS TO YOUR MAC ADDRESS 
 
 def connect():
     print("Opening Bluetooth socket...")
@@ -23,8 +22,9 @@ def connect():
             print ("Could not connect: ", error, "; Retrying in 2 seconds...")
             time.sleep(2)
     print("Socket successfully opened!")
+    return sock
 	
-def sendrecv(cmd): #SENDS COMMAND TO DONGLE, RECEIVES DATA FROM DONGLE 
+def sendrecv(cmd, sock): #SENDS COMMAND TO DONGLE, RECEIVES DATA FROM DONGLE 
     sock.send(cmd + "\r\n")
     time.sleep(0.05)      #SLEEP TO HELP YOUR DONGLE
     while 1:
@@ -52,9 +52,9 @@ def sendrecv(cmd): #SENDS COMMAND TO DONGLE, RECEIVES DATA FROM DONGLE
             return buffer
 
 
-if __name__ == "main":
+if __name__ == "__main__":
 	
-	connect()
+        sock = connect()
 	#INITIALIZE LED GPIO PINS
 	GPIO.setmode(GPIO.BCM)
 	GPIO.setwarnings(False)
@@ -102,30 +102,30 @@ if __name__ == "main":
 	GPIO.output(15,GPIO.LOW)
 	time.sleep(.09)
 	GPIO.output(14,GPIO.LOW)
-	
+
 	#SEND COMMAND "atz" TO RESET DONGLE
-	res = sendrecv("atz")
+	res = sendrecv("atz", sock)
 	print("atz response is:")
 	print(res)
 
 	#SEND COMMAND "ate0" TO TURN OFF ECHOES
-	res = sendrecv("ate0")
+	res = sendrecv("ate0", sock)
 	print("ate0 response is:")
 	print(res)
 
 	#LOOP FOR RPM 
 	while 1:
-		res = sendrecv("010C")
+		res = sendrecv("010C", sock)
 		if (res == "NO DATA"):
-		sock.close()
+		    sock.close()
 		    connect()
-		    sendrecv("atz")
-		    sendrecv("ate0")
+		    sendrecv("atz", sock)
+		    sendrecv("ate0", sock)
 		    continue
 		elif (res == "STOPPED"):
-		sock.close()
+		    sock.close()
 		    connect()
-		    sendrecv("atz")
+		    sendrecv("atz", sock)
 		    sendrecv("ate0")
 		    continue
 		data = res.split()
@@ -140,7 +140,7 @@ if __name__ == "main":
 		    continue
 		
 		RPM = ((256 * a) + b) / 4
-	   #print("RPM is %d" % rpm)
+	       #print("RPM is %d" % RPM)
 	   #time.sleep(.1)
 		
 	   # if(rpm > 0) and (rpm <= 800):
@@ -190,7 +190,7 @@ if __name__ == "main":
 		    GPIO.output(23,GPIO.HIGH)
 		    GPIO.output(24,GPIO.HIGH)
 		    GPIO.output(8,GPIO.LOW)
-		elif(RPM > 3000) and (RPM < 3500):
+		elif(RPM > 3000) and (RPM < 3900):
 		    GPIO.output(14,GPIO.HIGH)
 		    GPIO.output(15,GPIO.HIGH)
 		    GPIO.output(18,GPIO.HIGH)
@@ -198,7 +198,7 @@ if __name__ == "main":
 		    GPIO.output(24,GPIO.HIGH)
 		    GPIO.output(25,GPIO.HIGH)
 		    GPIO.output(8,GPIO.LOW)
-		elif(RPM >= 3500):
+		elif(RPM >= 3900 and RPM <= 6000):
 		    GPIO.output(14,GPIO.HIGH)
 		    GPIO.output(15,GPIO.HIGH)
 		    GPIO.output(18,GPIO.HIGH)
@@ -209,7 +209,9 @@ if __name__ == "main":
 		    time.sleep(0.05)
 		    GPIO.output(8,GPIO.LOW)
 		    time.sleep(0.04)
-		else:
+		elif(RPM > 6000):
+		    continue
+                else:
 		    print("Something went horribly wrong...")
-
-		sock.close()
+		
+        sock.close()
